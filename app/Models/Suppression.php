@@ -9,9 +9,20 @@ use App\Models\Concerns\BelongsToWorkspace;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
+/**
+ * @property SuppressionType $type
+ * @property string|null $value
+ * @property SuppressionReason $reason
+ * @property BounceDetail|null $bounce_detail
+ * @property string $source
+ * @property bool $permanent
+ * @property string|null $note
+ * @property Carbon|null $created_at
+ */
 class Suppression extends Model
 {
     use BelongsToWorkspace, LogsActivity, SoftDeletes;

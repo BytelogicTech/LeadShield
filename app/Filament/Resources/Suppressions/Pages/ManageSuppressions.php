@@ -130,10 +130,10 @@ class ManageSuppressions extends ManageRecords
                     foreach ($rows as $row) {
                         /** @var Suppression $row */
                         fputcsv($out, [
-                            $row->type instanceof \BackedEnum ? $row->type->value : (string) $row->type,
+                            $row->type->value,
                             (string) $row->value,
-                            $row->reason instanceof \BackedEnum ? $row->reason->value : (string) $row->reason,
-                            $row->bounce_detail instanceof \BackedEnum ? $row->bounce_detail->value : (string) $row->bounce_detail,
+                            $row->reason->value,
+                            $row->bounce_detail?->value,
                             (string) $row->source,
                             $row->permanent ? '1' : '0',
                             (string) $row->note,
