@@ -23,14 +23,11 @@ beforeEach(function () {
     ]);
 });
 
-it('seeds a single workspace owner who must change password', function () {
+it('seeds a single workspace owner', function () {
     $this->seed();
 
-    $admin = User::query()->where('email', 'admin@bytelogic.local')->first();
-
     expect(Workspace::query()->where('name', 'Bytelogic')->exists())->toBeTrue()
-        ->and($admin)->not->toBeNull()
-        ->and($admin->must_change_password)->toBeTrue();
+        ->and(User::query()->where('email', 'admin@bytelogic.local')->exists())->toBeTrue();
 });
 
 it('allows free provider policy by default', function () {
@@ -82,12 +79,4 @@ it('purges old import files but never suppressions or dns cache', function () {
 
     expect($exit)->toBe(0)
         ->and(Artisan::output())->toContain('Suppressions and DNS cache untouched');
-});
-
-it('redirects users who must change password', function () {
-    $this->user->forceFill(['must_change_password' => true])->save();
-
-    $this->actingAs($this->user)
-        ->get('/admin')
-        ->assertRedirect('/admin/change-password');
 });

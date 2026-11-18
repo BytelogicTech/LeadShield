@@ -6,6 +6,12 @@ use App\Enums\LeadVerdict;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property array<string, mixed>|null $raw
+ * @property array<int, array{code: string, message: string}>|null $reasons
+ * @property LeadVerdict|null $verdict
+ * @property string|null $suggested_fix
+ */
 class BatchLead extends Model
 {
     protected $fillable = [

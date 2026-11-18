@@ -1,19 +1,19 @@
 # LeadShield
 
-Simple internal tool: upload a lead file, clean it, download a safe list for Smartlead, and keep a permanent suppression list.
+Upload a lead file, clean it, download a safe list for Smartlead, keep a permanent suppression list.
 
-## Run (macOS)
-
-Use three terminals with Homebrew PHP 8.4:
+## Run (macOS, three terminals)
 
 ```bash
-# Terminal 1 — web app
+cd /Applications/XAMPP/xamppfiles/htdocs/dataclean
+
+# Terminal 1 — website
 ./bin/serve.sh
 
-# Terminal 2 — background jobs (needed for cleaning)
+# Terminal 2 — cleaning jobs (required)
 ./bin/queue.sh
 
-# Terminal 3 — daily cleanup scheduler
+# Terminal 3 — daily file cleanup
 export PATH="/opt/homebrew/opt/php@8.4/bin:$PATH"
 php artisan schedule:work
 ```
@@ -21,10 +21,13 @@ php artisan schedule:work
 Open http://127.0.0.1:8000/admin
 
 - Email: `admin@bytelogic.local`
-- Password: `password` (you will be asked to change it on first login)
+- Password: `password`
 
-## Notes
+## Upload flow
 
-- Queues use the **database** driver (no Redis, no Horizon).
-- Suppression list and DNS cache are never auto-deleted.
-- Uploaded files and outputs older than 7 days are deleted daily.
+1. Open **Uploads** → **Upload leads**
+2. Choose a CSV/XLSX file
+3. Wait on the upload page (progress refreshes automatically)
+4. Download **Final CSV**, **Gateway CSV**, **Later CSV**, and the **Excel report**
+
+Keep `./bin/queue.sh` running or cleaning will stay queued.

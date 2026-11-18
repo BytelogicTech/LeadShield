@@ -34,7 +34,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Bytelogic Admin',
                 'password' => Hash::make('password'),
                 'role' => WorkspaceRole::Owner,
-                'must_change_password' => true,
+                'must_change_password' => false,
                 'email_verified_at' => now(),
             ],
         );

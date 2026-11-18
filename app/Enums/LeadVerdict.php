@@ -5,7 +5,7 @@ namespace App\Enums;
 enum LeadVerdict: string
 {
     case Safe = 'safe';
-    case Risky = 'risky';
     case Gateway = 'gateway';
+    case Later = 'later';
     case Rejected = 'rejected';
 }
