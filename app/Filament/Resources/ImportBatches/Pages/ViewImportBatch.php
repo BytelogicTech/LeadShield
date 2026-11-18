@@ -47,19 +47,28 @@ class ViewImportBatch extends ViewRecord
         ];
     }
 
-    public function getPollingInterval(): ?string
-    {
-        /** @var ImportBatch $record */
-        $record = $this->getRecord();
-
-        return in_array($record->status, ['queued', 'processing'], true) ? '2s' : null;
-    }
-
     public function content(Schema $schema): Schema
     {
         return $schema->components([
             $this->getRelationManagersContentComponent(),
         ]);
+    }
+
+    /**
+     * Keep the detail page live while cleaning runs (progress widget + status).
+     */
+    public function getExtraBodyAttributes(): array
+    {
+        /** @var ImportBatch $record */
+        $record = $this->getRecord();
+
+        if (! in_array($record->status, ['queued', 'processing'], true)) {
+            return [];
+        }
+
+        return [
+            'wire:poll.2s' => '',
+        ];
     }
 
     public function getHeading(): string

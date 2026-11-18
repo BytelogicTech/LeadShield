@@ -33,7 +33,10 @@ class ListImportBatches extends ListRecords
             : "{$busy} uploads cleaning in the background…";
     }
 
-    public function getPollingInterval(): ?string
+    /**
+     * Filament tables poll via getTablePollingInterval() / Table::poll(), not getPollingInterval().
+     */
+    protected function getTablePollingInterval(): ?string
     {
         $busy = ImportBatch::query()
             ->whereIn('status', ['queued', 'processing'])

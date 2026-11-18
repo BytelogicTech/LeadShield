@@ -108,6 +108,11 @@ class ImportBatchResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->poll(function (): ?string {
+                return ImportBatch::query()
+                    ->whereIn('status', ['queued', 'processing'])
+                    ->exists() ? '2s' : null;
+            })
             ->columns([
                 TextColumn::make('id')
                     ->label('Upload #')
