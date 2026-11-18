@@ -9,6 +9,21 @@ class SmartleadReasonClassifier
 {
     /**
      * @param  array<string, mixed>  $row
+     */
+    public function isBounced(array $row): bool
+    {
+        if ($this->truthy($row['is_bounced'] ?? null)) {
+            return true;
+        }
+
+        $status = strtolower(trim((string) ($row['lead_status'] ?? '')));
+        $category = strtolower(trim((string) ($row['lead_category'] ?? '')));
+
+        return str_contains($status, 'bounce') || str_contains($category, 'bounce');
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
      * @return array{0: SuppressionReason, 1: BounceDetail|null}
      */
     public function classify(array $row): array
@@ -16,10 +31,9 @@ class SmartleadReasonClassifier
         $status = strtolower(trim((string) ($row['lead_status'] ?? '')));
         $category = strtolower(trim((string) ($row['lead_category'] ?? '')));
         $reply = strtolower(trim((string) ($row['reply_message'] ?? '')));
-        $isBounced = $this->truthy($row['is_bounced'] ?? null);
         $gotReply = $this->truthy($row['got_reply'] ?? null);
 
-        if ($isBounced || str_contains($status, 'bounce') || str_contains($category, 'bounce')) {
+        if ($this->isBounced($row)) {
             return [SuppressionReason::Bounced, $this->bounceDetail($reply)];
         }
 
@@ -66,8 +80,12 @@ class SmartleadReasonClassifier
             return $value;
         }
 
+        if (is_int($value) || is_float($value)) {
+            return (int) $value === 1;
+        }
+
         $v = strtolower(trim((string) $value));
 
-        return in_array($v, ['1', 'true', 'yes', 'y', 'bounced'], true);
+        return in_array($v, ['1', 'true', 'yes', 'y', 'bounced', 'bounce'], true);
     }
 }

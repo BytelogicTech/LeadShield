@@ -10,8 +10,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
-use Spatie\Activitylog\Models\Concerns\LogsActivity;
-use Spatie\Activitylog\Support\LogOptions;
 
 /**
  * @property SuppressionType $type
@@ -25,7 +23,7 @@ use Spatie\Activitylog\Support\LogOptions;
  */
 class Suppression extends Model
 {
-    use BelongsToWorkspace, LogsActivity, SoftDeletes;
+    use BelongsToWorkspace, SoftDeletes;
 
     protected $fillable = [
         'workspace_id',
@@ -56,13 +54,6 @@ class Suppression extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function getActivitylogOptions(): LogOptions
-    {
-        return LogOptions::defaults()
-            ->logFillable()
-            ->logOnlyDirty();
     }
 
     public static function hashValue(string $value): string

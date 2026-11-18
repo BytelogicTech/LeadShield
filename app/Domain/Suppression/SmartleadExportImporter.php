@@ -23,24 +23,42 @@ class SmartleadExportImporter
         $reader = SimpleExcelReader::create($absolutePath);
         $headers = array_map(fn ($h) => strtolower(trim((string) $h)), $reader->getHeaders() ?? []);
 
-        $emailKey = $this->findHeader($headers, ['email', 'email address', 'work email']);
+        $emailKey = $this->findHeader($headers, ['email', 'email address', 'work email'], exactFirst: true);
         if ($emailKey === null) {
             throw new \RuntimeException('Smartlead export needs an email column.');
         }
 
+        // Reject accidental WHOIS / non-campaign CSVs (e.g. registrant_email only).
+        if (in_array('domain_name', $headers, true) && ! in_array('is_bounced', $headers, true) && ! in_array('bounced', $headers, true)) {
+            throw new \RuntimeException('This file does not look like a Smartlead campaign export (missing is_bounced / Bounce column).');
+        }
+
+        $bounceKey = $this->findHeader($headers, ['is_bounced', 'bounced', 'bounce'], exactFirst: true);
+        if ($bounceKey === null) {
+            throw new \RuntimeException('Smartlead export needs an is_bounced / Bounce column. Only bounced rows are imported.');
+        }
+
         $map = [
             'email' => $emailKey,
-            'lead_status' => $this->findHeader($headers, ['lead_status', 'status']),
-            'lead_category' => $this->findHeader($headers, ['lead_category', 'category']),
-            'is_bounced' => $this->findHeader($headers, ['is_bounced', 'bounced']),
-            'got_reply' => $this->findHeader($headers, ['got_reply', 'replied']),
-            'sent_time' => $this->findHeader($headers, ['sent_time', 'sent_at']),
-            'reply_message' => $this->findHeader($headers, ['reply_message', 'message', 'bounce_message']),
+            'lead_status' => $this->findHeader($headers, ['lead_status', 'status'], exactFirst: true),
+            'lead_category' => $this->findHeader($headers, ['lead_category', 'category'], exactFirst: true),
+            'is_bounced' => $bounceKey,
+            'got_reply' => $this->findHeader($headers, ['got_reply', 'replied'], exactFirst: true),
+            'sent_time' => $this->findHeader($headers, ['sent_time', 'sent_at'], exactFirst: true),
+            'reply_message' => $this->findHeader($headers, ['reply_message', 'message', 'bounce_message'], exactFirst: true),
         ];
 
         foreach ($reader->getRows() as $row) {
             $stats['total']++;
             $normalized = $this->normalizeRow($row, $map);
+
+            // Only bounced leads become suppressions from a Smartlead export.
+            if (! $this->classifier->isBounced($normalized)) {
+                $stats['skipped']++;
+
+                continue;
+            }
+
             $email = $this->normaliser->normalise($normalized['email'] ?? '');
             if ($email === '' || ! str_contains($email, '@')) {
                 $stats['skipped']++;
@@ -92,12 +110,17 @@ class SmartleadExportImporter
      * @param  list<string>  $headers
      * @param  list<string>  $candidates
      */
-    private function findHeader(array $headers, array $candidates): ?string
+    private function findHeader(array $headers, array $candidates, bool $exactFirst = false): ?string
     {
         foreach ($candidates as $c) {
             if (in_array($c, $headers, true)) {
                 return $c;
             }
+        }
+
+        // Avoid matching registrant_email / similar when looking for "email".
+        if ($exactFirst) {
+            return null;
         }
 
         foreach ($headers as $h) {

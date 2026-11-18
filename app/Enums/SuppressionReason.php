@@ -11,4 +11,6 @@ enum SuppressionReason: string
     case Contacted = 'contacted';
     case Dirty = 'dirty';
     case Manual = 'manual';
+    /** Removed during LeadShield list cleaning (role, disposable, dead domain, etc.). */
+    case Cleaning = 'cleaning';
 }

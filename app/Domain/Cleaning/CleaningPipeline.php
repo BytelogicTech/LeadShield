@@ -17,6 +17,7 @@ use App\Domain\Cleaning\Stages\TypoDomainStage;
 use App\Domain\Dns\DnsResolver;
 use App\Domain\Import\ListCleanReader;
 use App\Domain\Suppression\SuppressionWriter;
+use App\Models\CleaningRule;
 
 class CleaningPipeline
 {
@@ -27,6 +28,9 @@ class CleaningPipeline
     /** @var list<CleaningStage> */
     private array $stages;
 
+    /** @var array<string, bool>|null null = all enabled (no DB rules yet) */
+    private ?array $enabledByKey = null;
+
     /**
      * @param  array<string, string>|null  $listCleanStatuses
      */
@@ -36,8 +40,27 @@ class CleaningPipeline
         ?array $listCleanStatuses = null,
         ?int $userId = null,
     ) {
+        $ruleRows = CleaningRule::query()
+            ->withoutGlobalScopes()
+            ->where('workspace_id', $workspaceId)
+            ->get(['key', 'enabled', 'params']);
+
+        if ($ruleRows->isNotEmpty()) {
+            $this->enabledByKey = [];
+            foreach ($ruleRows as $row) {
+                $this->enabledByKey[(string) $row->key] = (bool) $row->enabled;
+            }
+        }
+
+        $capMax = data_get(
+            $ruleRows->firstWhere('key', 'per_company_cap')?->params,
+            'max_per_company_domain',
+        );
+
         $this->duplicates = new InFileDuplicateStage;
-        $this->companyCap = new PerCompanyCapStage;
+        $this->companyCap = new PerCompanyCapStage(
+            maxPerCompanyDomain: is_numeric($capMax) ? (int) $capMax : null,
+        );
         $normaliser = new EmailNormaliser;
         $listCleanReader = new ListCleanReader($normaliser);
 
@@ -81,10 +104,28 @@ class CleaningPipeline
                 break;
             }
 
+            if (! $this->isStageEnabled($stage->key())) {
+                continue;
+            }
+
             $ctx = $stage->handle($ctx);
         }
 
         return $ctx;
+    }
+
+    private function isStageEnabled(string $key): bool
+    {
+        // Always normalise so later stages have email/domain populated.
+        if ($key === 'normalise') {
+            return true;
+        }
+
+        if ($this->enabledByKey === null) {
+            return true;
+        }
+
+        return $this->enabledByKey[$key] ?? true;
     }
 
     /**

@@ -41,7 +41,17 @@ it('classifies smartlead bounce and spam rejection', function () {
         ->and($detail2)->toBe(BounceDetail::SpamRejection);
 });
 
-it('imports every smartlead row into suppressions', function () {
+it('rejects non-smartlead files that lack a bounce column', function () {
+    $path = storage_path('framework/testing/whois.csv');
+    file_put_contents($path, "domain_name,registrant_email\nexample.com,a@example.com\n");
+
+    expect(fn () => app(SmartleadExportImporter::class)->import($path, (int) $this->workspace->id, $this->user->id))
+        ->toThrow(RuntimeException::class);
+
+    @unlink($path);
+});
+
+it('imports only bounced smartlead rows into suppressions', function () {
     $path = storage_path('framework/testing/smartlead.csv');
     file_put_contents($path, implode("\n", [
         'email,lead_status,lead_category,is_bounced,got_reply,sent_time,reply_message',
@@ -52,15 +62,16 @@ it('imports every smartlead row into suppressions', function () {
 
     $stats = app(SmartleadExportImporter::class)->import($path, (int) $this->workspace->id, $this->user->id);
 
-    expect($stats['created'])->toBe(3)
-        ->and(Suppression::query()->withoutGlobalScopes()->where('workspace_id', $this->workspace->id)->count())->toBe(3);
+    expect($stats['created'])->toBe(1)
+        ->and($stats['skipped'])->toBe(2)
+        ->and(Suppression::query()->withoutGlobalScopes()->where('workspace_id', $this->workspace->id)->count())->toBe(1);
 
     $b = Suppression::query()->withoutGlobalScopes()->where('value', 'b@acme.com')->first();
     expect($b->reason)->toBe(SuppressionReason::Bounced)
         ->and($b->bounce_detail)->toBe(BounceDetail::AddressNotFound);
 
-    $c = Suppression::query()->withoutGlobalScopes()->where('value', 'c@acme.com')->first();
-    expect($c->reason)->toBe(SuppressionReason::NotInterested);
+    expect(Suppression::query()->withoutGlobalScopes()->where('value', 'a@gmail.com')->exists())->toBeFalse()
+        ->and(Suppression::query()->withoutGlobalScopes()->where('value', 'c@acme.com')->exists())->toBeFalse();
 
     @unlink($path);
 });

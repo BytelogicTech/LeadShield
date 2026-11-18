@@ -68,4 +68,36 @@ class SuppressionWriter
 
         return ['created' => 1, 'updated' => 0, 'skipped' => 0];
     }
+
+    /**
+     * Batch upsert for cleaning removals (avoids N+1 on large lists).
+     *
+     * @param  list<array{value: string, reason: SuppressionReason, source: string, note?: ?string}>  $rows
+     * @return array{created: int, updated: int, skipped: int}
+     */
+    public function upsertMany(
+        int $workspaceId,
+        SuppressionType $type,
+        array $rows,
+        ?int $createdBy = null,
+    ): array {
+        $totals = ['created' => 0, 'updated' => 0, 'skipped' => 0];
+
+        foreach ($rows as $row) {
+            $result = $this->upsert(
+                workspaceId: $workspaceId,
+                type: $type,
+                value: (string) ($row['value'] ?? ''),
+                reason: $row['reason'],
+                source: (string) ($row['source'] ?? 'leadshield'),
+                note: $row['note'] ?? null,
+                createdBy: $createdBy,
+            );
+            $totals['created'] += $result['created'];
+            $totals['updated'] += $result['updated'];
+            $totals['skipped'] += $result['skipped'];
+        }
+
+        return $totals;
+    }
 }

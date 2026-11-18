@@ -13,7 +13,8 @@ class ProcessImportBatchJob implements ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 0;
+    /** PHP 8.4 can treat max_execution_time=0 as "0 seconds exceeded" — use a high finite limit. */
+    public int $timeout = 86400;
 
     public int $tries = 1;
 
@@ -21,6 +22,10 @@ class ProcessImportBatchJob implements ShouldQueue
 
     public function handle(ImportBatchProcessor $processor): void
     {
+        // Do not use 0 here: on PHP 8.4 it can fatal with "0 seconds exceeded" during DNS lookups.
+        set_time_limit(86400);
+        ini_set('max_execution_time', '86400');
+
         $batch = ImportBatch::query()->withoutGlobalScopes()->findOrFail($this->importBatchId);
         $processor->process($batch);
     }

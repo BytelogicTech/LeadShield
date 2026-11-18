@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ImportBatches\Pages;
 use App\Filament\Resources\ImportBatches\ImportBatchResource;
 use App\Jobs\ProcessImportBatchJob;
 use App\Models\ImportBatch;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Storage;
 
@@ -41,16 +42,23 @@ class CreateImportBatch extends CreateRecord
             'processed_rows' => 0,
         ]);
 
-        // Run cleaning in this request so uploads never sit at 0% waiting for queue.sh.
-        set_time_limit(0);
-        ProcessImportBatchJob::dispatchSync($batch->id);
-        $batch->refresh();
+        // Background job — survives tab close. Requires ./bin/queue.sh running.
+        ProcessImportBatchJob::dispatch($batch->id);
 
         return $batch;
     }
 
     protected function getRedirectUrl(): string
     {
-        return ImportBatchResource::getUrl('view', ['record' => $this->record]);
+        return ImportBatchResource::getUrl('index');
+    }
+
+    protected function afterCreate(): void
+    {
+        Notification::make()
+            ->title('Upload queued')
+            ->body('Cleaning runs in the background. You can close this tab — just keep the queue worker running on the server.')
+            ->success()
+            ->send();
     }
 }

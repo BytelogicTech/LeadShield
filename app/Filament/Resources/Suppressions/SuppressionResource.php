@@ -7,6 +7,7 @@ use App\Enums\SuppressionReason;
 use App\Enums\SuppressionType;
 use App\Filament\Resources\Suppressions\Pages\ManageSuppressions;
 use App\Models\Suppression;
+use App\Support\SuppressionSources;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -61,13 +62,8 @@ class SuppressionResource extends Resource
                     ))
                     ->visible(fn ($get) => $get('reason') === SuppressionReason::Bounced->value),
                 Select::make('source')
-                    ->options([
-                        'manual' => 'Manual',
-                        'import' => 'Import',
-                        'smartlead_export' => 'Smartlead export',
-                        'listclean' => 'ListClean',
-                    ])
-                    ->default('manual')
+                    ->options(SuppressionSources::options())
+                    ->default(SuppressionSources::MANUAL)
                     ->required(),
                 Toggle::make('permanent')->default(true),
                 Textarea::make('note')->columnSpanFull(),
@@ -82,7 +78,11 @@ class SuppressionResource extends Resource
                 TextColumn::make('value')->searchable()->sortable(),
                 TextColumn::make('reason')->badge()->sortable(),
                 TextColumn::make('bounce_detail')->toggleable(),
-                TextColumn::make('source')->toggleable(),
+                TextColumn::make('source')
+                    ->label('Where from')
+                    ->formatStateUsing(fn (?string $state): string => $state ? SuppressionSources::label($state) : '—')
+                    ->badge()
+                    ->toggleable(),
                 IconColumn::make('permanent')->boolean(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
@@ -96,14 +96,13 @@ class SuppressionResource extends Resource
                         fn (SuppressionReason $r) => [$r->value => str_replace('_', ' ', ucfirst($r->value))]
                     )->all()
                 ),
-                SelectFilter::make('source')->options([
-                    'manual' => 'Manual',
-                    'import' => 'Import',
-                    'smartlead_export' => 'Smartlead export',
-                    'listclean' => 'ListClean',
-                ]),
+                SelectFilter::make('source')
+                    ->label('Where from')
+                    ->options(SuppressionSources::options()),
             ])
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('id', 'desc')
+            ->paginated([10, 25, 50, 100])
+            ->defaultPaginationPageOption(25)
             ->recordActions([
                 EditAction::make()
                     ->mutateFormDataUsing(function (array $data): array {

@@ -40,5 +40,7 @@ class DatabaseSeeder extends Seeder
         );
 
         $user->syncRoles([WorkspaceRole::Owner->value]);
+
+        $this->call(CleaningRuleSeeder::class);
     }
 }

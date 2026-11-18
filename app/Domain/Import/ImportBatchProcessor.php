@@ -5,18 +5,39 @@ namespace App\Domain\Import;
 use App\Domain\Cleaning\CleaningPipeline;
 use App\Domain\Cleaning\LeadContext;
 use App\Domain\Dns\DnsResolver;
+use App\Domain\Suppression\SuppressionWriter;
 use App\Enums\LeadVerdict;
+use App\Enums\SuppressionReason;
+use App\Enums\SuppressionType;
 use App\Models\BatchLead;
 use App\Models\ImportBatch;
+use App\Support\SuppressionSources;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class ImportBatchProcessor
 {
+    /**
+     * Live cleaning suppressions (LeadShield source).
+     * listclean_dirty is written by ListCleanStage with source=listclean — do not duplicate here.
+     *
+     * @var list<string>
+     */
+    private const SUPPRESS_ON_REJECT = [
+        'role_address',
+        'typo_domain',
+        'disposable',
+        'domain_nxdomain',
+        'domain_no_mail',
+        'domain_no_mx',
+        'generated_address',
+    ];
+
     public function __construct(
         private LeadFileReader $reader,
         private ImportOutputWriter $outputs,
         private ListCleanReader $listCleanReader,
+        private SuppressionWriter $suppressions,
     ) {}
 
     public function process(ImportBatch $batch): void
@@ -60,14 +81,22 @@ class ImportBatchProcessor
         $pipeline->resetBatchState();
 
         $headers = $this->reader->headers($absolute);
-        $emailCol = data_get($batch->column_mapping, 'email')
-            ?: $this->reader->detectEmailColumn($headers);
+        $emailCol = data_get($batch->column_mapping, 'email');
+        if (! filled($emailCol)) {
+            $samples = $this->reader->sampleRows($absolute, 25);
+            $emailCol = $this->reader->detectEmailColumn($headers, $samples);
+        }
+        $emailCol = (string) $emailCol;
+
+        // Count first so the UI can show real x / y (pct%) instead of 0%.
+        $totalRows = $this->reader->countRows($absolute);
 
         $batch->update([
             'status' => 'processing',
             'dns_status' => 'ok',
             'column_mapping' => array_merge($batch->column_mapping ?? [], ['email' => $emailCol]),
             'started_at' => $batch->started_at ?? now(),
+            'total_rows' => $totalRows,
             'processed_rows' => 0,
         ]);
 
@@ -76,6 +105,8 @@ class ImportBatchProcessor
         $counts = array_fill_keys(CleaningPipeline::reasonCodes(), 0);
         $processed = 0;
         $chunk = [];
+        /** @var list<array{value: string, reason: SuppressionReason, source: string, note: ?string}> $suppressionChunk */
+        $suppressionChunk = [];
 
         [, $rows] = $this->reader->stream($absolute);
 
@@ -91,6 +122,19 @@ class ImportBatchProcessor
                     $counts[$code] = 0;
                 }
                 $counts[$code]++;
+            }
+
+            if (
+                $ctx->verdict === LeadVerdict::Rejected
+                && $ctx->email !== ''
+                && in_array($ctx->primaryCode(), self::SUPPRESS_ON_REJECT, true)
+            ) {
+                $suppressionChunk[] = [
+                    'value' => $ctx->email,
+                    'reason' => SuppressionReason::Cleaning,
+                    'source' => SuppressionSources::LEADSHIELD,
+                    'note' => 'Upload #'.$batch->id.': '.$ctx->primaryCode().' — '.$ctx->primaryReason(),
+                ];
             }
 
             $chunk[] = [
@@ -111,6 +155,8 @@ class ImportBatchProcessor
             if (count($chunk) >= 200) {
                 BatchLead::query()->insert($chunk);
                 $chunk = [];
+                $this->flushSuppressions($batch, $suppressionChunk);
+                $suppressionChunk = [];
                 $batch->update(['processed_rows' => $processed, 'stats' => ['reason_counts' => $counts]]);
             }
         }
@@ -118,6 +164,7 @@ class ImportBatchProcessor
         if ($chunk !== []) {
             BatchLead::query()->insert($chunk);
         }
+        $this->flushSuppressions($batch, $suppressionChunk);
 
         $batch->update([
             'total_rows' => $processed,
@@ -142,5 +189,22 @@ class ImportBatchProcessor
                 ],
             ],
         ]);
+    }
+
+    /**
+     * @param  list<array{value: string, reason: SuppressionReason, source: string, note: ?string}>  $rows
+     */
+    private function flushSuppressions(ImportBatch $batch, array $rows): void
+    {
+        if ($rows === []) {
+            return;
+        }
+
+        $this->suppressions->upsertMany(
+            workspaceId: (int) $batch->workspace_id,
+            type: SuppressionType::Email,
+            rows: $rows,
+            createdBy: $batch->user_id ? (int) $batch->user_id : null,
+        );
     }
 }

@@ -26,6 +26,104 @@ class LeadFileReader
     }
 
     /**
+     * Count data rows (excludes header). Used so progress can show x / y (pct%).
+     */
+    public function countRows(string $absolutePath): int
+    {
+        $count = 0;
+        [, $rows] = $this->stream($absolutePath);
+        foreach ($rows as $_) {
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function sampleRows(string $absolutePath, int $limit = 25): array
+    {
+        $samples = [];
+        [, $rows] = $this->stream($absolutePath);
+        foreach ($rows as $row) {
+            $samples[] = $row;
+            if (count($samples) >= $limit) {
+                break;
+            }
+        }
+
+        return $samples;
+    }
+
+    /**
+     * Find every column that looks like it contains emails, ranked best-first.
+     *
+     * @param  list<string>  $headers
+     * @param  list<array<string, mixed>>  $sampleRows
+     * @return list<string>
+     */
+    public function detectEmailColumns(array $headers, array $sampleRows = []): array
+    {
+        if ($headers === []) {
+            return [];
+        }
+
+        $exact = ['email', 'e-mail', 'email address', 'work email', 'email_address', 'emailaddress'];
+        $scored = [];
+
+        foreach ($headers as $header) {
+            $name = (string) $header;
+            $lower = strtolower(trim($name));
+            $score = 0;
+
+            if (in_array($lower, $exact, true)) {
+                $score += 100;
+            } elseif (str_contains($lower, 'email') || str_contains($lower, 'e-mail')) {
+                $score += 50;
+            }
+
+            $hits = 0;
+            foreach ($sampleRows as $row) {
+                $value = trim((string) ($row[$name] ?? ''));
+                if ($value !== '' && filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                    $hits++;
+                } elseif (str_contains($value, '@') && str_contains($value, '.')) {
+                    $hits++;
+                }
+            }
+
+            if ($hits > 0) {
+                $score += $hits * 10;
+            }
+
+            if ($score > 0) {
+                $scored[$name] = $score;
+            }
+        }
+
+        if ($scored === []) {
+            // Fall back: any column with @ in samples, even without "email" in the name.
+            foreach ($headers as $header) {
+                $name = (string) $header;
+                $hits = 0;
+                foreach ($sampleRows as $row) {
+                    if (str_contains((string) ($row[$name] ?? ''), '@')) {
+                        $hits++;
+                    }
+                }
+                if ($hits > 0) {
+                    $scored[$name] = $hits;
+                }
+            }
+        }
+
+        arsort($scored);
+
+        return array_keys($scored);
+    }
+
+    /**
      * @param  list<string>  $headers
      * @param  list<array<string, mixed>>  $sampleRows
      */
@@ -35,42 +133,12 @@ class LeadFileReader
             return $preferred;
         }
 
-        $exact = ['email', 'e-mail', 'email address', 'work email', 'email_address'];
-        $cands = array_values(array_filter(
-            $headers,
-            fn ($h) => str_contains(strtolower((string) $h), 'email') || str_contains(strtolower((string) $h), 'e-mail')
-        ));
-
-        foreach ($cands as $c) {
-            if (in_array(strtolower(trim((string) $c)), $exact, true)) {
-                return (string) $c;
-            }
+        $candidates = $this->detectEmailColumns($headers, $sampleRows);
+        if ($candidates !== []) {
+            return $candidates[0];
         }
 
-        if ($cands !== []) {
-            return (string) $cands[0];
-        }
-
-        $best = null;
-        $bestN = 0;
-        foreach ($headers as $h) {
-            $n = 0;
-            foreach ($sampleRows as $r) {
-                if (str_contains((string) ($r[$h] ?? ''), '@')) {
-                    $n++;
-                }
-            }
-            if ($n > $bestN) {
-                $best = (string) $h;
-                $bestN = $n;
-            }
-        }
-
-        if ($best === null) {
-            throw new \RuntimeException('Could not find an email column. Columns: '.implode(', ', $headers));
-        }
-
-        return $best;
+        throw new \RuntimeException('Could not find an email column. Columns: '.implode(', ', $headers));
     }
 
     /**

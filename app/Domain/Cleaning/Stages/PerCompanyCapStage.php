@@ -10,6 +10,10 @@ class PerCompanyCapStage implements CleaningStage
     /** @var array<string, int> */
     private array $counts = [];
 
+    public function __construct(
+        private ?int $maxPerCompanyDomain = null,
+    ) {}
+
     public function key(): string
     {
         return 'per_company_cap';
@@ -31,7 +35,7 @@ class PerCompanyCapStage implements CleaningStage
             return $ctx;
         }
 
-        $max = (int) config('cleaning.max_per_company_domain', 1);
+        $max = $this->maxPerCompanyDomain ?? (int) config('cleaning.max_per_company_domain', 1);
         $this->counts[$ctx->domain] = ($this->counts[$ctx->domain] ?? 0) + 1;
 
         if ($this->counts[$ctx->domain] > $max) {
