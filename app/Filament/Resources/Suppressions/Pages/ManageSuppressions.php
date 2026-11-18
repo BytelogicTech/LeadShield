@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\Suppressions\Pages;
 
+use App\Domain\Suppression\PlainBlocklistImporter;
+use App\Domain\Suppression\SmartleadExportImporter;
 use App\Filament\Resources\Suppressions\SuppressionResource;
-use App\Jobs\ImportPlainSuppressionsJob;
-use App\Jobs\ImportSmartleadSuppressionsJob;
 use App\Models\Suppression;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -59,17 +59,26 @@ class ManageSuppressions extends ManageRecords
                         return;
                     }
 
-                    ImportSmartleadSuppressionsJob::dispatch(
-                        $path,
-                        (int) auth()->user()->workspace_id,
-                        auth()->id(),
-                    );
+                    try {
+                        $stats = app(SmartleadExportImporter::class)->import(
+                            Storage::disk('local')->path($path),
+                            (int) auth()->user()->workspace_id,
+                            auth()->id(),
+                        );
+                        Storage::disk('local')->delete($path);
 
-                    Notification::make()
-                        ->title('Smartlead import queued')
-                        ->body('Keep ./bin/queue.sh running. Every email in the file will be added to the suppression list.')
-                        ->success()
-                        ->send();
+                        Notification::make()
+                            ->title('Smartlead import finished')
+                            ->body("Added {$stats['created']}, updated {$stats['updated']}, skipped {$stats['skipped']} (total rows {$stats['total']}).")
+                            ->success()
+                            ->send();
+                    } catch (\Throwable $e) {
+                        Notification::make()
+                            ->title('Smartlead import failed')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
                 }),
             Action::make('import_plain')
                 ->label('Import emails / domains')
@@ -97,17 +106,26 @@ class ManageSuppressions extends ManageRecords
                         return;
                     }
 
-                    ImportPlainSuppressionsJob::dispatch(
-                        $path,
-                        (int) auth()->user()->workspace_id,
-                        auth()->id(),
-                    );
+                    try {
+                        $stats = app(PlainBlocklistImporter::class)->import(
+                            Storage::disk('local')->path($path),
+                            (int) auth()->user()->workspace_id,
+                            auth()->id(),
+                        );
+                        Storage::disk('local')->delete($path);
 
-                    Notification::make()
-                        ->title('Blocklist import queued')
-                        ->body('Keep ./bin/queue.sh running.')
-                        ->success()
-                        ->send();
+                        Notification::make()
+                            ->title('Blocklist import finished')
+                            ->body("Added {$stats['created']}, updated {$stats['updated']}, skipped {$stats['skipped']} (total rows {$stats['total']}).")
+                            ->success()
+                            ->send();
+                    } catch (\Throwable $e) {
+                        Notification::make()
+                            ->title('Blocklist import failed')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
                 }),
             Action::make('export')
                 ->label('Export CSV')
