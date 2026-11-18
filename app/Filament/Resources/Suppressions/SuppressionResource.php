@@ -21,11 +21,14 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class SuppressionResource extends Resource
 {
     protected static ?string $model = Suppression::class;
+
+    protected static ?string $navigationLabel = 'Suppressions';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedNoSymbol;
 
@@ -50,7 +53,8 @@ class SuppressionResource extends Resource
                     ->options(collect(SuppressionReason::cases())->mapWithKeys(
                         fn (SuppressionReason $r) => [$r->value => str_replace('_', ' ', ucfirst($r->value))]
                     ))
-                    ->required(),
+                    ->required()
+                    ->live(),
                 Select::make('bounce_detail')
                     ->options(collect(BounceDetail::cases())->mapWithKeys(
                         fn (BounceDetail $d) => [$d->value => str_replace('_', ' ', ucfirst($d->value))]
@@ -74,17 +78,42 @@ class SuppressionResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('type')->badge(),
-                TextColumn::make('value')->searchable(),
-                TextColumn::make('reason')->badge(),
+                TextColumn::make('type')->badge()->sortable(),
+                TextColumn::make('value')->searchable()->sortable(),
+                TextColumn::make('reason')->badge()->sortable(),
                 TextColumn::make('bounce_detail')->toggleable(),
-                TextColumn::make('source'),
+                TextColumn::make('source')->toggleable(),
                 IconColumn::make('permanent')->boolean(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
+            ->filters([
+                SelectFilter::make('type')->options([
+                    'email' => 'Email',
+                    'domain' => 'Domain',
+                ]),
+                SelectFilter::make('reason')->options(
+                    collect(SuppressionReason::cases())->mapWithKeys(
+                        fn (SuppressionReason $r) => [$r->value => str_replace('_', ' ', ucfirst($r->value))]
+                    )->all()
+                ),
+                SelectFilter::make('source')->options([
+                    'manual' => 'Manual',
+                    'import' => 'Import',
+                    'smartlead_export' => 'Smartlead export',
+                    'listclean' => 'ListClean',
+                ]),
+            ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->mutateFormDataUsing(function (array $data): array {
+                        $value = strtolower(trim((string) ($data['value'] ?? '')));
+                        $value = ltrim($value, '@');
+                        $data['value'] = $value;
+                        $data['value_hash'] = Suppression::hashValue($value);
+
+                        return $data;
+                    }),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

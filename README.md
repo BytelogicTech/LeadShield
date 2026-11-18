@@ -31,3 +31,15 @@ Open http://127.0.0.1:8000/admin
 4. Download **Final CSV**, **Gateway CSV**, **Later CSV**, and the **Excel report**
 
 Keep `./bin/queue.sh` running or cleaning will stay queued.
+
+## Suppressions
+
+Open **Suppressions**:
+
+- **Add one** — single email or domain
+- **Import Smartlead export** — CSV with email, lead_status, lead_category, is_bounced, got_reply, sent_time, reply_message (every row is suppressed)
+- **Import emails / domains** — CSV/TXT of emails or `@domain` / domain lines
+- **Export CSV** — download the full list
+- Search and filters on the table; delete one or many rows
+
+Suppressions are permanent and never auto-deleted.
