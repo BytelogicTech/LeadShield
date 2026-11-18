@@ -16,9 +16,14 @@ class CreateImportBatch extends CreateRecord
     {
         $path = $data['upload'] ?? null;
         $original = $data['original_filename'] ?? basename((string) $path);
+        $listclean = $data['listclean'] ?? null;
 
         if (! $path || ! Storage::disk('local')->exists($path)) {
             throw new \RuntimeException('Upload failed. Please try again.');
+        }
+
+        if (filled($listclean) && ! Storage::disk('local')->exists((string) $listclean)) {
+            throw new \RuntimeException('ListClean upload failed. Please try again.');
         }
 
         $batch = ImportBatch::query()->create([
@@ -27,6 +32,7 @@ class CreateImportBatch extends CreateRecord
             'lead_source_id' => $data['lead_source_id'] ?? null,
             'original_filename' => is_array($original) ? (string) reset($original) : (string) $original,
             'storage_path' => $path,
+            'listclean_path' => filled($listclean) ? (string) $listclean : null,
             'column_mapping' => filled($data['email_column'] ?? null)
                 ? ['email' => $data['email_column']]
                 : null,

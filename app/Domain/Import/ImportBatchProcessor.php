@@ -16,6 +16,7 @@ class ImportBatchProcessor
     public function __construct(
         private LeadFileReader $reader,
         private ImportOutputWriter $outputs,
+        private ListCleanReader $listCleanReader,
     ) {}
 
     public function process(ImportBatch $batch): void
@@ -41,7 +42,21 @@ class ImportBatchProcessor
             throw $e;
         }
 
-        $pipeline = new CleaningPipeline((int) $batch->workspace_id, $dns);
+        $listCleanStatuses = null;
+        if (filled($batch->listclean_path)) {
+            $listCleanAbsolute = Storage::disk('local')->path((string) $batch->listclean_path);
+            if (! is_file($listCleanAbsolute)) {
+                throw new RuntimeException('ListClean file is missing.');
+            }
+            $listCleanStatuses = $this->listCleanReader->load($listCleanAbsolute);
+        }
+
+        $pipeline = new CleaningPipeline(
+            (int) $batch->workspace_id,
+            $dns,
+            $listCleanStatuses,
+            $batch->user_id ? (int) $batch->user_id : null,
+        );
         $pipeline->resetBatchState();
 
         $headers = $this->reader->headers($absolute);
@@ -118,6 +133,7 @@ class ImportBatchProcessor
             'stats' => [
                 'reason_counts' => $counts,
                 'output_paths' => $paths,
+                'listclean_used' => $listCleanStatuses !== null,
                 'totals' => [
                     'safe' => $counts['safe'] ?? 0,
                     'gateway' => $counts['gateway'] ?? 0,

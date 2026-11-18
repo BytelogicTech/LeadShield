@@ -51,6 +51,19 @@ class ImportBatchResource extends Resource
                     ])
                     ->required()
                     ->storeFileNamesIn('original_filename'),
+                FileUpload::make('listclean')
+                    ->label('ListClean result (optional)')
+                    ->helperText('If provided, only emails marked clean are kept. Dirty emails are removed and added to suppressions.')
+                    ->disk('local')
+                    ->directory('imports/tmp')
+                    ->acceptedFileTypes([
+                        'text/csv',
+                        'text/plain',
+                        'application/vnd.ms-excel',
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        '.csv',
+                        '.xlsx',
+                    ]),
                 TextInput::make('email_column')
                     ->label('Email column name (optional)')
                     ->helperText('Leave blank to auto-detect.'),
@@ -68,6 +81,9 @@ class ImportBatchResource extends Resource
             ->components([
                 TextEntry::make('original_filename')->label('File'),
                 TextEntry::make('status')->badge(),
+                TextEntry::make('listclean_path')
+                    ->label('ListClean')
+                    ->formatStateUsing(fn ($state) => filled($state) ? 'Yes' : 'No'),
                 TextEntry::make('dns_status')->label('DNS'),
                 TextEntry::make('progress')
                     ->label('Progress')

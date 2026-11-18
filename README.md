@@ -2,7 +2,7 @@
 
 Upload a lead file, clean it, download a safe list for Smartlead, keep a permanent suppression list.
 
-## Run (macOS, three terminals)
+## Run (macOS, two or three terminals)
 
 ```bash
 cd /Applications/XAMPP/xamppfiles/htdocs/dataclean
@@ -10,10 +10,10 @@ cd /Applications/XAMPP/xamppfiles/htdocs/dataclean
 # Terminal 1 — website
 ./bin/serve.sh
 
-# Terminal 2 — cleaning jobs (required)
+# Terminal 2 — required for cleaning and imports
 ./bin/queue.sh
 
-# Terminal 3 — daily file cleanup
+# Terminal 3 — optional, daily cleanup at 02:15
 export PATH="/opt/homebrew/opt/php@8.4/bin:$PATH"
 php artisan schedule:work
 ```
@@ -23,23 +23,23 @@ Open http://127.0.0.1:8000/admin
 - Email: `admin@bytelogic.local`
 - Password: `password`
 
-## Upload flow
+## Uploads
 
-1. Open **Uploads** → **Upload leads**
-2. Choose a CSV/XLSX file
-3. Wait on the upload page (progress refreshes automatically)
-4. Download **Final CSV**, **Gateway CSV**, **Later CSV**, and the **Excel report**
-
-Keep `./bin/queue.sh` running or cleaning will stay queued.
+1. **Uploads → Upload leads**
+2. Choose lead CSV/XLSX
+3. Optionally attach a **ListClean** result file (only `clean` emails are kept; dirty emails are removed and added to Suppressions)
+4. Keep the queue worker running until status is **completed**
+5. Download Final / Gateway / Later / Excel report
 
 ## Suppressions
 
-Open **Suppressions**:
+- Add one email or domain
+- Import Smartlead campaign export (every email is suppressed)
+- Import plain CSV/TXT of emails or `@domain` lines
+- Search, filter, delete, export
 
-- **Add one** — single email or domain
-- **Import Smartlead export** — CSV with email, lead_status, lead_category, is_bounced, got_reply, sent_time, reply_message (every row is suppressed)
-- **Import emails / domains** — CSV/TXT of emails or `@domain` / domain lines
-- **Export CSV** — download the full list
-- Search and filters on the table; delete one or many rows
+Suppressions and DNS cache are never auto-deleted.
 
-Suppressions are permanent and never auto-deleted.
+## Cleanup
+
+Every day (with `schedule:work` running), uploaded files and generated outputs older than **7 days** are deleted.

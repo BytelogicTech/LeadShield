@@ -28,8 +28,10 @@ class PurgeExpiredImportData extends Command
         foreach ($batches as $batch) {
             BatchLead::query()->where('import_batch_id', $batch->id)->delete();
 
-            if ($batch->storage_path && Storage::disk('local')->exists($batch->storage_path)) {
-                Storage::disk('local')->delete($batch->storage_path);
+            foreach ([$batch->storage_path, $batch->listclean_path] as $path) {
+                if (is_string($path) && $path !== '' && Storage::disk('local')->exists($path)) {
+                    Storage::disk('local')->delete($path);
+                }
             }
 
             $outputs = data_get($batch->stats, 'output_paths', []);
@@ -41,12 +43,32 @@ class PurgeExpiredImportData extends Command
                 }
             }
 
+            Storage::disk('local')->deleteDirectory('imports/'.$batch->id);
+
             $batch->delete();
             $purged++;
         }
 
+        $this->purgeOldTempFiles($cutoff);
+
         $this->info("Purged {$purged} import batch(es) older than {$days} day(s). Suppressions and DNS cache untouched.");
 
         return self::SUCCESS;
+    }
+
+    private function purgeOldTempFiles(\DateTimeInterface $cutoff): void
+    {
+        foreach (['imports/tmp', 'suppressions/tmp'] as $dir) {
+            if (! Storage::disk('local')->exists($dir)) {
+                continue;
+            }
+
+            foreach (Storage::disk('local')->files($dir) as $file) {
+                $lastModified = Storage::disk('local')->lastModified($file);
+                if ($lastModified > 0 && $lastModified < $cutoff->getTimestamp()) {
+                    Storage::disk('local')->delete($file);
+                }
+            }
+        }
     }
 }
