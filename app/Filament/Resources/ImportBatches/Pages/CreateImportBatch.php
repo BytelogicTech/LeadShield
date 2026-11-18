@@ -41,7 +41,10 @@ class CreateImportBatch extends CreateRecord
             'processed_rows' => 0,
         ]);
 
-        ProcessImportBatchJob::dispatch($batch->id);
+        // Run cleaning in this request so uploads never sit at 0% waiting for queue.sh.
+        set_time_limit(0);
+        ProcessImportBatchJob::dispatchSync($batch->id);
+        $batch->refresh();
 
         return $batch;
     }

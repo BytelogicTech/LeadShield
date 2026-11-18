@@ -73,7 +73,7 @@ class ViewImportBatch extends ViewRecord
                 ? (int) floor(($record->processed_rows / max(1, $record->total_rows)) * 100)
                 : 0;
 
-            return "Cleaning in progress… {$record->processed_rows} rows ({$pct}%). Keep the queue worker running.";
+            return "Cleaning in progress… {$record->processed_rows} rows ({$pct}%).";
         }
 
         if ($record->status === 'completed') {
