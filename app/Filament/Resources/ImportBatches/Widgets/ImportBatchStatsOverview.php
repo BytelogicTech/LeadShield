@@ -69,16 +69,17 @@ class ImportBatchStatsOverview extends StatsOverviewWidget
             return [];
         }
 
+        $clean = CleaningUi::finalCount($batch);
+        $later = CleaningUi::laterCount($batch);
+        $gateway = CleaningUi::gatewayCount($batch);
+        $removed = CleaningUi::removedCount($batch);
+
         return [
             Stat::make('Total rows', number_format((int) $batch->total_rows)),
-            Stat::make('Clean leads', number_format(CleaningUi::finalCount($batch)))
-                ->color('success'),
-            Stat::make('Later', number_format(CleaningUi::laterCount($batch)))
-                ->color('warning'),
-            Stat::make('Gateway', number_format(CleaningUi::gatewayCount($batch)))
-                ->color('purple'),
-            Stat::make('Removed', number_format(CleaningUi::removedCount($batch)))
-                ->color('danger'),
+            Stat::make('Clean', CleaningUi::metricLabel($batch, $clean))->color('success'),
+            Stat::make('Later', CleaningUi::metricLabel($batch, $later))->color('warning'),
+            Stat::make('Gateway', CleaningUi::metricLabel($batch, $gateway))->color('purple'),
+            Stat::make('Removed', CleaningUi::metricLabel($batch, $removed))->color('danger'),
         ];
     }
 

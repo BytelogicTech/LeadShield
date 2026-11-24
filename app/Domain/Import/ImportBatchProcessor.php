@@ -11,6 +11,7 @@ use App\Enums\SuppressionReason;
 use App\Enums\SuppressionType;
 use App\Models\BatchLead;
 use App\Models\ImportBatch;
+use App\Support\CleaningUi;
 use App\Support\SuppressionSources;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -152,12 +153,12 @@ class ImportBatchProcessor
 
             $processed++;
 
-            if (count($chunk) >= 200) {
+            if (count($chunk) >= 100) {
                 BatchLead::query()->insert($chunk);
                 $chunk = [];
                 $this->flushSuppressions($batch, $suppressionChunk);
                 $suppressionChunk = [];
-                $batch->update(['processed_rows' => $processed, 'stats' => ['reason_counts' => $counts]]);
+                $this->touchProgress($batch, $processed, $counts);
             }
         }
 
@@ -166,10 +167,15 @@ class ImportBatchProcessor
         }
         $this->flushSuppressions($batch, $suppressionChunk);
 
+        $totals = CleaningUi::liveTotals($counts, $processed);
+
         $batch->update([
             'total_rows' => $processed,
             'processed_rows' => $processed,
-            'stats' => ['reason_counts' => $counts],
+            'stats' => [
+                'reason_counts' => $counts,
+                'totals' => $totals,
+            ],
         ]);
 
         $paths = $this->outputs->write($batch->fresh());
@@ -181,12 +187,21 @@ class ImportBatchProcessor
                 'reason_counts' => $counts,
                 'output_paths' => $paths,
                 'listclean_used' => $listCleanStatuses !== null,
-                'totals' => [
-                    'safe' => $counts['safe'] ?? 0,
-                    'gateway' => $counts['gateway'] ?? 0,
-                    'later' => $counts['later_company_cap'] ?? 0,
-                    'rejected' => max(0, $processed - ($counts['safe'] ?? 0) - ($counts['gateway'] ?? 0) - ($counts['later_company_cap'] ?? 0)),
-                ],
+                'totals' => $totals,
+            ],
+        ]);
+    }
+
+    /**
+     * @param  array<string, int>  $counts
+     */
+    private function touchProgress(ImportBatch $batch, int $processed, array $counts): void
+    {
+        $batch->update([
+            'processed_rows' => $processed,
+            'stats' => [
+                'reason_counts' => $counts,
+                'totals' => CleaningUi::liveTotals($counts, $processed),
             ],
         ]);
     }

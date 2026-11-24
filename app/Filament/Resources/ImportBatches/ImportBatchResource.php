@@ -134,64 +134,50 @@ class ImportBatchResource extends Resource
                     ->color(fn (string $state): string => CleaningUi::statusColor($state)),
                 TextColumn::make('progress')
                     ->label('Progress')
-                    ->state(function (ImportBatch $record): string {
-                        if (in_array($record->status, ['queued', 'processing'], true)) {
-                            $done = (int) $record->processed_rows;
-                            $total = (int) $record->total_rows;
-                            if ($total > 0) {
-                                $pct = (int) min(100, floor(($done / max(1, $total)) * 100));
-
-                                return number_format($done).' / '.number_format($total).' ('.$pct.'%)';
-                            }
-
-                            return $record->status === 'queued' ? 'Waiting in queue…' : 'Counting rows…';
-                        }
-
-                        if ($record->status === 'completed') {
-                            return number_format((int) $record->total_rows).' rows';
-                        }
-
-                        if ($record->status === 'failed') {
-                            return 'Failed';
-                        }
-
-                        return '—';
-                    })
-                    ->badge()
-                    ->color(fn (ImportBatch $record): string => match ($record->status) {
-                        'queued' => 'gray',
-                        'processing' => 'info',
-                        'completed' => 'success',
-                        'failed' => 'danger',
-                        default => 'gray',
-                    }),
+                    ->state(fn (ImportBatch $record): string => view('filament.import-batches.progress-cell', [
+                        'record' => $record,
+                    ])->render())
+                    ->html(),
                 TextColumn::make('total_rows')
-                    ->label('Total rows')
+                    ->label('Total')
                     ->alignEnd()
-                    ->sortable(),
+                    ->sortable()
+                    ->numeric(),
                 TextColumn::make('final_count')
                     ->label('Clean')
-                    ->state(fn (ImportBatch $record): int => CleaningUi::finalCount($record))
-                    ->badge()
-                    ->color('success')
+                    ->state(fn (ImportBatch $record): string => view('filament.import-batches.metric-cell', [
+                        'record' => $record,
+                        'count' => CleaningUi::finalCount($record),
+                        'color' => 'success',
+                    ])->render())
+                    ->html()
                     ->alignEnd(),
                 TextColumn::make('later_count')
                     ->label('Later')
-                    ->state(fn (ImportBatch $record): int => CleaningUi::laterCount($record))
-                    ->badge()
-                    ->color('warning')
+                    ->state(fn (ImportBatch $record): string => view('filament.import-batches.metric-cell', [
+                        'record' => $record,
+                        'count' => CleaningUi::laterCount($record),
+                        'color' => 'warning',
+                    ])->render())
+                    ->html()
                     ->alignEnd(),
                 TextColumn::make('gateway_count')
                     ->label('Gateway')
-                    ->state(fn (ImportBatch $record): int => CleaningUi::gatewayCount($record))
-                    ->badge()
-                    ->color('purple')
+                    ->state(fn (ImportBatch $record): string => view('filament.import-batches.metric-cell', [
+                        'record' => $record,
+                        'count' => CleaningUi::gatewayCount($record),
+                        'color' => 'purple',
+                    ])->render())
+                    ->html()
                     ->alignEnd(),
                 TextColumn::make('removed_count')
                     ->label('Removed')
-                    ->state(fn (ImportBatch $record): int => CleaningUi::removedCount($record))
-                    ->badge()
-                    ->color('danger')
+                    ->state(fn (ImportBatch $record): string => view('filament.import-batches.metric-cell', [
+                        'record' => $record,
+                        'count' => CleaningUi::removedCount($record),
+                        'color' => 'danger',
+                    ])->render())
+                    ->html()
                     ->alignEnd(),
             ])
             ->defaultSort('id', 'desc')

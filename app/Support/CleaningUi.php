@@ -232,22 +232,80 @@ class CleaningUi
 
     public static function finalCount(ImportBatch $batch): int
     {
-        return (int) data_get($batch->stats, 'totals.safe', 0);
+        return self::metricCount($batch, 'safe');
     }
 
     public static function laterCount(ImportBatch $batch): int
     {
-        return (int) data_get($batch->stats, 'totals.later', 0);
+        return self::metricCount($batch, 'later', 'later_company_cap');
     }
 
     public static function gatewayCount(ImportBatch $batch): int
     {
-        return (int) data_get($batch->stats, 'totals.gateway', 0);
+        return self::metricCount($batch, 'gateway');
     }
 
     public static function removedCount(ImportBatch $batch): int
     {
-        return (int) data_get($batch->stats, 'totals.rejected', 0);
+        $fromTotals = data_get($batch->stats, 'totals.rejected');
+        if ($fromTotals !== null) {
+            return (int) $fromTotals;
+        }
+
+        $safe = self::finalCount($batch);
+        $later = self::laterCount($batch);
+        $gateway = self::gatewayCount($batch);
+        $processed = max((int) $batch->processed_rows, $safe + $later + $gateway);
+
+        return max(0, $processed - $safe - $later - $gateway);
+    }
+
+    /**
+     * Prefer completed totals; fall back to live reason_counts while processing.
+     */
+    public static function metricCount(ImportBatch $batch, string $totalsKey, ?string $reasonKey = null): int
+    {
+        $fromTotals = data_get($batch->stats, 'totals.'.$totalsKey);
+        if ($fromTotals !== null) {
+            return (int) $fromTotals;
+        }
+
+        return (int) data_get($batch->stats, 'reason_counts.'.($reasonKey ?? $totalsKey), 0);
+    }
+
+    /**
+     * Sample-style label: "6,729 (74.5%)" using total_rows (or processed so far) as base.
+     */
+    public static function metricLabel(ImportBatch $batch, int $count): string
+    {
+        $denom = max(1, (int) $batch->total_rows ?: (int) $batch->processed_rows ?: 1);
+        $pct = round(($count / $denom) * 100, 1);
+
+        return number_format($count).' ('.$pct.'%)';
+    }
+
+    public static function metricPercent(ImportBatch $batch, int $count): float
+    {
+        $denom = max(1, (int) $batch->total_rows ?: (int) $batch->processed_rows ?: 1);
+
+        return round(($count / $denom) * 100, 1);
+    }
+
+    /**
+     * @return array{safe: int, later: int, gateway: int, rejected: int}
+     */
+    public static function liveTotals(array $reasonCounts, int $processed): array
+    {
+        $safe = (int) ($reasonCounts['safe'] ?? 0);
+        $gateway = (int) ($reasonCounts['gateway'] ?? 0);
+        $later = (int) ($reasonCounts['later_company_cap'] ?? 0);
+
+        return [
+            'safe' => $safe,
+            'gateway' => $gateway,
+            'later' => $later,
+            'rejected' => max(0, $processed - $safe - $gateway - $later),
+        ];
     }
 
     /**

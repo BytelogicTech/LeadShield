@@ -27,9 +27,33 @@ class LeadFileReader
 
     /**
      * Count data rows (excludes header). Used so progress can show x / y (pct%).
+     * CSV/TXT uses a fast line scan; XLSX still streams via SimpleExcel.
      */
     public function countRows(string $absolutePath): int
     {
+        $ext = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
+        if (in_array($ext, ['csv', 'txt'], true)) {
+            $handle = fopen($absolutePath, 'rb');
+            if ($handle === false) {
+                return 0;
+            }
+
+            $count = 0;
+            $header = fgetcsv($handle);
+            if ($header === false) {
+                fclose($handle);
+
+                return 0;
+            }
+
+            while (fgetcsv($handle) !== false) {
+                $count++;
+            }
+            fclose($handle);
+
+            return $count;
+        }
+
         $count = 0;
         [, $rows] = $this->stream($absolutePath);
         foreach ($rows as $_) {
